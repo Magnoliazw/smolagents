@@ -6,20 +6,53 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
+import sys
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-# study_lab/common.py -> 仓库根 -> agent-study/
+# study_lab/common.py -> 仓库根 -> 工作区根（D:\AI trial\workbuddy）
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STUDY_ROOT = REPO_ROOT.parent
 ENV_FILE = STUDY_ROOT / ".env"
+VENV_PY = STUDY_ROOT / ".venv" / "Scripts" / "python.exe"
+
+
+def _check_interpreter() -> None:
+    """被"错误的 Python"跑起来时，先讲人话，而不是抛 ModuleNotFoundError。
+
+    这台机器上 `python` 会先命中 WorkBuddy 自带的 3.13，那里面没有 smolagents。
+    直接报 traceback 会让人以为环境坏了，其实只是解释器选错了。
+    """
+    if importlib.util.find_spec("smolagents") is not None:
+        return
+
+    rel = (
+        f"..\\.venv\\Scripts\\python.exe study_lab\\{Path(sys.argv[0]).name}"
+        if Path(sys.argv[0]).suffix == ".py"
+        else "..\\.venv\\Scripts\\python.exe <脚本>"
+    )
+    raise SystemExit(
+        "\n[错误] 你用的不是本项目的 Python，所以找不到 smolagents。\n\n"
+        f"  当前解释器：{sys.executable}\n"
+        f"  版本：{sys.version.split()[0]}\n"
+        f"  应该用：{VENV_PY}\n\n"
+        "两种改法，选一个：\n"
+        f"  1) 直接用 venv 的解释器（最省事）：\n     {rel} --offline\n\n"
+        "  2) 先激活再跑（激活成功后提示符前会多出 (.venv)）：\n"
+        "     ..\\.venv\\Scripts\\Activate.ps1\n"
+        "     python study_lab\\check_env.py --offline\n"
+    )
+
+
+_check_interpreter()
 
 
 def load_env() -> None:
-    """把 agent-study/.env 读进环境变量。key 放在仓库外，永远不会被 git 带走。"""
+    """把工作区根目录的 .env 读进环境变量。key 放在仓库外，永远不会被 git 带走。"""
+    from dotenv import load_dotenv  # 放在函数内：本文件要能在缺依赖时先给出解释器提示
+
     if ENV_FILE.exists():
         load_dotenv(ENV_FILE, override=False)
     else:
