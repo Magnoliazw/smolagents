@@ -150,3 +150,5 @@ tool_output/
 
 # Gradio runtime
 .gradio/
+# study_lab 实验结果（每次跑都会重新生成，别进版本库）
+study_lab/results/

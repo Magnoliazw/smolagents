@@ -74,13 +74,29 @@ def build_model(temperature: float = 0.0):
 
     为什么要 temperature=0：第 1 周要比的是"两种描述"的差异，
     不是采样的随机性。想观察随机性就把 --temp 调高，别混在一起。
+
+    关于 tool_choice（踩过的坑，值得记住）：
+    smolagents 的 OpenAIModel 默认发 tool_choice="required"（models.py:510），
+    意思是"这一步你必须调工具"。但推理型模型（本机的 deepseek-flash 就是）
+    不接受这个值，直接回 400：
+        Thinking mode does not support this tool_choice
+    这个 400 会一路冒泡成 AgentGenerationError，看上去像"环境坏了"，
+    其实只是框架默认值和这个模型的约束撞了。这里用 .env 的 TOOL_CHOICE 覆盖它，
+    默认 auto；填 none 则用 REMOVE_PARAMETER 把参数彻底摘掉。
     """
     from smolagents import OpenAIModel
+    from smolagents.models import REMOVE_PARAMETER
 
     load_env()
     kwargs: dict = {"temperature": temperature}
     if os.getenv("MAX_TOKENS", "").strip():
         kwargs["max_tokens"] = int(os.environ["MAX_TOKENS"])
+
+    choice = os.getenv("TOOL_CHOICE", "auto").strip().lower()
+    if choice in ("none", "off", "remove"):
+        kwargs["tool_choice"] = REMOVE_PARAMETER
+    elif choice:
+        kwargs["tool_choice"] = choice
 
     return OpenAIModel(
         model_id=_need("MODEL_ID"),

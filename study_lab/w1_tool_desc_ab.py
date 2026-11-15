@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 from common import REPO_ROOT, Timer, build_model, cost_of, rule
-from tools_refund import build_tools, describe_all
+from tools_refund import CANON, build_tools, describe_all
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 QUERIES_FILE = Path(__file__).resolve().parent / "queries.json"
@@ -70,10 +70,20 @@ def first_tool_call(agent) -> tuple[str, dict, bool, str]:
     return "__none__", {}, False, last_error
 
 
+# 打印时的固定顺序：含糊 -> 规格，再到旧名组、对照、干净条件组
+ORDERED_VARIANTS = [
+    "vague", "spec",
+    "vague_legacy", "spec_legacy",
+    "collide", "collide_id",
+    "opaque_vague", "opaque_spec",
+]
+
 VALID_ARGS = {
-    "query_refund_status": {"refund_id"},
-    "query_refund_by_order": {"order_id"},
-    "query_order_status": {"order_id"},
+    # 每组都额外允许 "id"：干净条件（opaque_*）里三个工具的参数统一叫 id，
+    # 那是刻意的设计，不该被记成"参数名错"。
+    "query_refund_status": {"refund_id", "id"},
+    "query_refund_by_order": {"order_id", "id"},
+    "query_order_status": {"order_id", "id"},
 }
 
 
@@ -115,7 +125,9 @@ def run_one(agent, q: dict, variant: str) -> dict:
             state = "error"
 
     called, args, executed, step_error = first_tool_call(agent)
-    tool_ok, arg_key_ok, arg_value_ok = judge(called, args, q, q["user"])
+    # 旧名先归一化到规范名，再判定——这样 queries.json 一份题库能同时跑两组工具集
+    called_canon = CANON.get(called, called)
+    tool_ok, arg_key_ok, arg_value_ok = judge(called_canon, args, q, q["user"])
 
     return {
         "variant": variant,
@@ -165,25 +177,28 @@ def summarize(rows: list[dict]) -> dict[str, dict]:
 def print_summary(summary: dict[str, dict]) -> None:
     rule("结果对比")
     header = (
-        f"{'描述版本':<8}{'轮次':>6}{'选对率':>9}{'参数名错':>10}{'参数值错':>10}"
+        f"{'描述版本':<14}{'轮次':>6}{'选对率':>9}{'参数名错':>10}{'参数值错':>10}"
         f"{'参数被拒':>10}{'该调不调':>10}{'不该调却调':>12}{'平均输入':>10}{'平均输出':>10}{'平均耗时':>10}"
     )
     print(header)
     print("-" * len(header))
-    for variant in ("vague", "spec"):
+    order = ORDERED_VARIANTS + [v for v in summary if v not in ORDERED_VARIANTS]
+    for variant in order:
         if variant not in summary:
             continue
         s = summary[variant]
         print(
-            f"{variant:<8}{s['runs']:>6}{s['tool_acc']:>9.0%}{s['arg_key_err']:>10.0%}"
+            f"{variant:<14}{s['runs']:>6}{s['tool_acc']:>9.0%}{s['arg_key_err']:>10.0%}"
             f"{s['arg_val_err']:>10.0%}{s['rejected']:>10}{s['miss']:>10}{s['over']:>12}"
             f"{s['avg_in']:>10.0f}{s['avg_out']:>10.0f}{s['avg_ms']:>9.0f}ms"
         )
-    if "vague" in summary and "spec" in summary:
-        gain = summary["spec"]["tool_acc"] - summary["vague"]["tool_acc"]
-        print(f"\n  选对率提升：{gain:+.0%}（spec 相对 vague）")
-        if gain <= 0:
-            print("  提升不明显时先别急着改描述——看下面的逐条明细，往往是某个工具的边界还没写清。")
+    # 每一对（含糊 vs 规格）单独算提升，别把两组混在一起比
+    for vague, spec in (("vague", "spec"), ("vague_legacy", "spec_legacy"), ("opaque_vague", "opaque_spec")):
+        if vague in summary and spec in summary:
+            gain = summary[spec]["tool_acc"] - summary[vague]["tool_acc"]
+            print(f"\n  选对率提升：{gain:+.0%}（{spec} 相对 {vague}）")
+            if gain <= 0:
+                print("  提升不明显时先别急着改描述——看下面的逐条明细，往往是某个工具的边界还没写清。")
 
 
 def print_detail(rows: list[dict]) -> None:
@@ -194,7 +209,7 @@ def print_detail(rows: list[dict]) -> None:
 
     for qid, per_variant in sorted(by_query.items()):
         cells = []
-        for variant in ("vague", "spec"):
+        for variant in ORDERED_VARIANTS:
             calls = per_variant.get(variant, [])
             if not calls:
                 continue
@@ -214,7 +229,7 @@ def write_outputs(rows: list[dict], summary: dict[str, dict], tag: str) -> Path:
 
     md_path = RESULTS_DIR / f"w1_{tag}.md"
     lines = [f"# 第 1 周结果 {tag}", "", "| 描述版本 | 轮次 | 选对率 | 参数名错 | 参数值错 | 平均输入 token | 平均输出 token |", "|---|---|---|---|---|---|---|"]
-    for variant in ("vague", "spec"):
+    for variant in ORDERED_VARIANTS:
         if variant not in summary:
             continue
         s = summary[variant]

@@ -82,10 +82,12 @@ def online_test() -> bool:
     load_env()
     rule("联网自检：真调一次模型")
     model = build_model()
-    agent = ToolCallingAgent(tools=build_tools("spec"), model=model, max_steps=1)
+    # max_steps 给 3：1 步调工具、1 步读结果、1 步给最终答复。
+    # 只给 1 步也能验证连通性，但会停在 "Reached max steps"，看不出闭环是否走通。
+    agent = ToolCallingAgent(tools=build_tools("spec"), model=model, max_steps=3)
     q = "我上周那笔退款 RF20251103001 到账了没"
     try:
-        result = agent.run(q, max_steps=1, return_full_result=True)
+        result = agent.run(q, max_steps=3, return_full_result=True)
     except Exception as exc:
         print(f"  调用失败：{type(exc).__name__}: {exc}")
         print("  检查 .env 里的 MODEL_ID / API_BASE / API_KEY，以及网络能不能出去。")
@@ -94,6 +96,7 @@ def online_test() -> bool:
     usage = getattr(result, "token_usage", None)
     print(f"  问题：{q}")
     print(f"  模型调用：{called} {args}（执行={executed}）")
+    print(f"  最终答复：{str(getattr(result, 'output', '')).strip()[:120]}")
     print(f"  token：输入 {getattr(usage, 'input_tokens', 0)} / 输出 {getattr(usage, 'output_tokens', 0)}")
     print("  通了——可以跑 study_lab/w1_tool_desc_ab.py 了")
     return True
