@@ -1,0 +1,82 @@
+[
+  {
+    "id": "Q01",
+    "type": "正常",
+    "user": "我上周那笔退款 RF20251103001 到账了没",
+    "expected_tool": "query_refund_status",
+    "expected_arg": "refund_id",
+    "note": "给了退款单号，直接查状态"
+  },
+  {
+    "id": "Q02",
+    "type": "正常",
+    "user": "退款 RF20251107042 现在处理到哪一步了？",
+    "expected_tool": "query_refund_status",
+    "expected_arg": "refund_id",
+    "note": "同上，问的是进度"
+  },
+  {
+    "id": "Q03",
+    "type": "边界",
+    "user": "订单 2025110500123 的那笔退款退到哪里了？",
+    "expected_tool": "query_refund_by_order",
+    "expected_arg": "order_id",
+    "note": "只有订单号，必须先换退款单号"
+  },
+  {
+    "id": "Q04",
+    "type": "歧义",
+    "user": "我上周买的东西钱退给我了吗",
+    "expected_tool": "__none__",
+    "expected_arg": null,
+    "note": "没有任何单号，正确行为是追问而不是硬调工具"
+  },
+  {
+    "id": "Q05",
+    "type": "干扰",
+    "user": "订单 2025110600999 发货了没有？",
+    "expected_tool": "query_order_status",
+    "expected_arg": "order_id",
+    "note": "问的是物流，不是退款——考验边界"
+  },
+  {
+    "id": "Q06",
+    "type": "边界",
+    "user": "退款 RF20251101008 怎么还没到账，是不是退失败了",
+    "expected_tool": "query_refund_status",
+    "expected_arg": "refund_id",
+    "note": "数据里这条是『已退回 + 失败原因』，看模型会不会把原因说给用户"
+  },
+  {
+    "id": "Q07",
+    "type": "脏格式",
+    "user": "RF 20251102003 这个单号退成功了没",
+    "expected_tool": "query_refund_status",
+    "expected_arg": "refund_id",
+    "note": "单号里带空格，看模型会不会原样带进去"
+  },
+  {
+    "id": "Q08",
+    "type": "两步",
+    "user": "我订单 2025110400777 申请退款了，退款进度怎么样",
+    "expected_tool": "query_refund_by_order",
+    "expected_arg": "order_id",
+    "note": "只有订单号；单步评测里先换单号即算选对"
+  },
+  {
+    "id": "Q09",
+    "type": "域外",
+    "user": "我要退货，怎么申请",
+    "expected_tool": "__none__",
+    "expected_arg": null,
+    "note": "工具集里没有创建退款的能力，正确行为是说明并引导，不是硬调"
+  },
+  {
+    "id": "Q10",
+    "type": "边界",
+    "user": "订单 2025110800888 的退款到账了吗",
+    "expected_tool": "query_refund_by_order",
+    "expected_arg": "order_id",
+    "note": "语义要退款、手里只有订单号——这是开篇事故的原句型"
+  }
+]
